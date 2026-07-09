@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-TOKEN = "8829999667:AAHvpnpfKYD1SCNxSoQpZ_cE7CNElXlXUHg"
+TOKEN = "8829999667:AAFBCa3fNPE8yB-MhzUxaCoSEg4X5AG17Fs"
 OWNER_IDS = [8305135192, 8316171820]
 IRAN_TZ = ZoneInfo("Asia/Tehran")
 
@@ -825,13 +825,14 @@ def recv_sched_datetime(msg):
     uid = msg.from_user.id
     try:
         dt_str = msg.text.strip()
-        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
         draft[uid]["datetime"] = dt_str
-        draft[uid]["sched_dt"] = dt
+        # sched_dt رو حذف کردیم چون JSON-serializable نیست
+        post = {k: v for k, v in draft[uid].items() if k != "sched_dt"}
         posts = load_scheduled()
-        posts.append(draft[uid])
+        posts.append(post)
         save_scheduled(posts)
-        add_schedule_job(draft[uid])
+        add_schedule_job(post)
         user_state.pop(uid, None)
         draft.pop(uid, None)
         bot.send_message(
