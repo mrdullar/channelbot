@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-TOKEN = "8829999667:AAHvpnpfKYD1SCNxSoQpZ_cE7CNElXlXUHg"
+TOKEN = "8829999667:AAFBCa3fNPE8yB-MhzUxaCoSEg4X5AG17Fs"
 OWNER_IDS = [8305135192, 8316171820]
 IRAN_TZ = ZoneInfo("Asia/Tehran")
 
@@ -168,7 +168,7 @@ def edit_old_post(msg):
     uid = msg.from_user.id
     if not is_admin(uid): return
     user_state[uid] = "edit_get_link"
-    draft[uid] = {}
+    draft[uid] = {"edit_buttons": []}
     bot.send_message(
         msg.chat.id,
         "🔗 لینک پست رو بفرست:\nمثلاً: https://t.me/thelostinwaves/123",
@@ -180,8 +180,6 @@ def recv_edit_link(msg):
     uid = msg.from_user.id
     try:
         link = msg.text.strip()
-        # استخراج channel و message_id از لینک
-        # فرمت: https://t.me/channelname/123
         parts = link.replace("https://t.me/", "").split("/")
         if len(parts) < 2:
             raise ValueError("فرمت اشتباه")
@@ -189,17 +187,39 @@ def recv_edit_link(msg):
         msg_id = int(parts[1])
         draft[uid]["edit_channel"] = channel
         draft[uid]["edit_msg_id"] = msg_id
+        draft[uid]["edit_buttons"] = []
         user_state[uid] = "edit_choose_action"
-
-        mk = types.InlineKeyboardMarkup()
-        mk.add(types.InlineKeyboardButton("📝 ویرایش متن", callback_data="editpost:text"))
-        mk.add(types.InlineKeyboardButton("🎵 تغییر لینک موزیک", callback_data="editpost:music"))
-        mk.add(types.InlineKeyboardButton("💬 تغییر پاپ‌آپ", callback_data="editpost:popup"))
-        mk.add(types.InlineKeyboardButton("🔗 تغییر دکمه لینک", callback_data="editpost:link"))
-        mk.add(types.InlineKeyboardButton("🗑 حذف همه دکمه‌ها", callback_data="editpost:remove_btns"))
-        bot.send_message(msg.chat.id, f"✅ پست پیدا شد!\nکانال: {channel}\nID: {msg_id}\n\nچی می‌خوای ویرایش کنی؟", reply_markup=mk)
+        show_edit_menu(msg.chat.id, uid)
     except:
         bot.send_message(msg.chat.id, "❌ لینک اشتباهه!\nمثلاً: https://t.me/thelostinwaves/123", reply_markup=back_cancel_kb())
+
+def show_edit_menu(chat_id, uid):
+    d = draft.get(uid, {})
+    buttons = d.get("edit_buttons", [])
+    text = f"✅ پست پیدا شد!\nکانال: {d.get('edit_channel')}\nID: {d.get('edit_msg_id')}\n\n"
+    if buttons:
+        text += "دکمه‌های اضافه شده:\n"
+        for b in buttons:
+            if b["type"] == "popup":
+                text += f"💬 {b['name']}\n"
+            elif b["type"] == "music":
+                text += f"🎵 {b['name']}\n"
+            elif b["type"] == "link":
+                text += f"🔗 {b['name']}\n"
+        text += "\n"
+    text += "چی می‌خوای انجام بدی؟"
+
+    mk = types.InlineKeyboardMarkup()
+    mk.row(
+        types.InlineKeyboardButton("💬 افزودن پاپ‌آپ", callback_data="editpost:add_popup"),
+        types.InlineKeyboardButton("🎵 افزودن موزیک", callback_data="editpost:add_music")
+    )
+    mk.row(types.InlineKeyboardButton("🔗 افزودن لینک", callback_data="editpost:add_link"))
+    mk.row(types.InlineKeyboardButton("📝 ویرایش متن پست", callback_data="editpost:text"))
+    if buttons:
+        mk.row(types.InlineKeyboardButton("✅ ذخیره دکمه‌ها", callback_data="editpost:save"))
+    mk.row(types.InlineKeyboardButton("🗑 حذف همه دکمه‌ها", callback_data="editpost:remove_btns"))
+    bot.send_message(chat_id, text, reply_markup=mk)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("editpost:"))
 def cb_editpost(call):
@@ -214,17 +234,38 @@ def cb_editpost(call):
         user_state[uid] = "edit_new_text"
         bot.send_message(call.message.chat.id, "📝 متن جدید رو بنویس:", reply_markup=back_cancel_kb())
 
-    elif action == "music":
-        user_state[uid] = "edit_new_music_link"
-        bot.send_message(call.message.chat.id, "🎵 لینک جدید موزیک رو بفرست:\nمثلاً: https://t.me/theLOSTinSOUNDS/45", reply_markup=back_cancel_kb())
+    elif action == "add_popup":
+        user_state[uid] = "edit_add_popup_text"
+        bot.send_message(call.message.chat.id, "💬 متن پاپ‌آپ رو بنویس:", reply_markup=back_cancel_kb())
 
-    elif action == "popup":
-        user_state[uid] = "edit_new_popup_text"
-        bot.send_message(call.message.chat.id, "💬 متن جدید پاپ‌آپ رو بنویس:", reply_markup=back_cancel_kb())
+    elif action == "add_music":
+        user_state[uid] = "edit_add_music_link"
+        bot.send_message(call.message.chat.id, f"🎵 لینک موزیک رو بفرست:\nمثلاً: https://t.me/theLOSTinSOUNDS/45", reply_markup=back_cancel_kb())
 
-    elif action == "link":
-        user_state[uid] = "edit_new_link_name"
-        bot.send_message(call.message.chat.id, "🔗 اسم دکمه لینک جدید رو بنویس:", reply_markup=back_cancel_kb())
+    elif action == "add_link":
+        user_state[uid] = "edit_add_link_name"
+        bot.send_message(call.message.chat.id, "🔗 اسم دکمه لینک رو بنویس:", reply_markup=back_cancel_kb())
+
+    elif action == "save":
+        try:
+            buttons = d.get("edit_buttons", [])
+            mk = types.InlineKeyboardMarkup()
+            row_btns = []
+            for b in buttons:
+                if b["type"] == "popup":
+                    row_btns.append(types.InlineKeyboardButton(b["name"], callback_data=f"pp:{b['popup_id']}"))
+                elif b["type"] == "music":
+                    row_btns.append(types.InlineKeyboardButton(b["name"], url=b["url"]))
+                elif b["type"] == "link":
+                    row_btns.append(types.InlineKeyboardButton(b["name"], url=b["url"]))
+            if row_btns:
+                mk.row(*row_btns)
+            bot.edit_message_reply_markup(channel, msg_id, reply_markup=mk)
+            user_state.pop(uid, None)
+            draft.pop(uid, None)
+            bot.send_message(call.message.chat.id, "✅ دکمه‌ها آپدیت شدن!", reply_markup=main_menu(uid))
+        except Exception as e:
+            bot.send_message(call.message.chat.id, f"❌ خطا: {e}", reply_markup=main_menu(uid))
 
     elif action == "remove_btns":
         try:
@@ -241,76 +282,57 @@ def recv_edit_new_text(msg):
     d = draft.get(uid, {})
     try:
         bot.edit_message_text(msg.text, d["edit_channel"], d["edit_msg_id"])
-        user_state.pop(uid, None)
-        draft.pop(uid, None)
-        bot.send_message(msg.chat.id, "✅ متن پست ویرایش شد!", reply_markup=main_menu(uid))
+        user_state[uid] = "edit_choose_action"
+        bot.send_message(msg.chat.id, "✅ متن پست ویرایش شد!")
+        show_edit_menu(msg.chat.id, uid)
     except Exception as e:
         bot.send_message(msg.chat.id, f"❌ خطا: {e}", reply_markup=main_menu(uid))
 
-@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_new_music_link", content_types=["text"])
-def recv_edit_music_link(msg):
+@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_add_popup_text", content_types=["text"])
+def recv_edit_add_popup_text(msg):
     uid = msg.from_user.id
-    d = draft.get(uid, {})
-    new_link = msg.text.strip()
-    try:
-        # فقط دکمه موزیک رو آپدیت می‌کنیم
-        mk = types.InlineKeyboardMarkup()
-        mk.add(types.InlineKeyboardButton("🎵 آهنگ", url=new_link))
-        bot.edit_message_reply_markup(d["edit_channel"], d["edit_msg_id"], reply_markup=mk)
-        user_state.pop(uid, None)
-        draft.pop(uid, None)
-        bot.send_message(msg.chat.id, "✅ لینک موزیک آپدیت شد!", reply_markup=main_menu(uid))
-    except Exception as e:
-        bot.send_message(msg.chat.id, f"❌ خطا: {e}", reply_markup=main_menu(uid))
-
-@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_new_popup_text", content_types=["text"])
-def recv_edit_popup_text(msg):
-    uid = msg.from_user.id
-    d = draft.get(uid, {})
     draft[uid]["new_popup_text"] = msg.text
-    user_state[uid] = "edit_new_popup_btn"
+    user_state[uid] = "edit_add_popup_btn"
     bot.send_message(msg.chat.id, "🔤 اسم دکمه پاپ‌آپ رو بنویس:", reply_markup=back_cancel_kb())
 
-@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_new_popup_btn", content_types=["text"])
-def recv_edit_popup_btn(msg):
+@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_add_popup_btn", content_types=["text"])
+def recv_edit_add_popup_btn(msg):
     uid = msg.from_user.id
     d = draft.get(uid, {})
     btn_name = msg.text
     popup_text = d.get("new_popup_text", "")
-    try:
-        popup_id = str(uuid.uuid4())[:8]
-        popups = load_popups()
-        popups[popup_id] = popup_text
-        save_popups(popups)
-        mk = types.InlineKeyboardMarkup()
-        mk.add(types.InlineKeyboardButton(btn_name, callback_data=f"pp:{popup_id}"))
-        bot.edit_message_reply_markup(d["edit_channel"], d["edit_msg_id"], reply_markup=mk)
-        user_state.pop(uid, None)
-        draft.pop(uid, None)
-        bot.send_message(msg.chat.id, "✅ دکمه پاپ‌آپ آپدیت شد!", reply_markup=main_menu(uid))
-    except Exception as e:
-        bot.send_message(msg.chat.id, f"❌ خطا: {e}", reply_markup=main_menu(uid))
+    popup_id = str(uuid.uuid4())[:8]
+    popups = load_popups()
+    popups[popup_id] = popup_text
+    save_popups(popups)
+    draft[uid]["edit_buttons"].append({"type": "popup", "name": btn_name, "popup_id": popup_id})
+    user_state[uid] = "edit_choose_action"
+    bot.send_message(msg.chat.id, "✅ پاپ‌آپ اضافه شد!")
+    show_edit_menu(msg.chat.id, uid)
 
-@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_new_link_name", content_types=["text"])
-def recv_edit_link_name(msg):
+@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_add_music_link", content_types=["text"])
+def recv_edit_add_music_link(msg):
+    uid = msg.from_user.id
+    draft[uid]["edit_buttons"].append({"type": "music", "name": "🎵 آهنگ", "url": msg.text.strip()})
+    user_state[uid] = "edit_choose_action"
+    bot.send_message(msg.chat.id, "✅ دکمه موزیک اضافه شد!")
+    show_edit_menu(msg.chat.id, uid)
+
+@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_add_link_name", content_types=["text"])
+def recv_edit_add_link_name(msg):
     uid = msg.from_user.id
     draft[uid]["new_link_name"] = msg.text
-    user_state[uid] = "edit_new_link_url"
-    bot.send_message(msg.chat.id, "🔗 لینک جدید رو بفرست (https://...):", reply_markup=back_cancel_kb())
+    user_state[uid] = "edit_add_link_url"
+    bot.send_message(msg.chat.id, "🔗 لینک رو بفرست (https://...):", reply_markup=back_cancel_kb())
 
-@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_new_link_url", content_types=["text"])
-def recv_edit_link_url(msg):
+@bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_add_link_url", content_types=["text"])
+def recv_edit_add_link_url(msg):
     uid = msg.from_user.id
     d = draft.get(uid, {})
-    try:
-        mk = types.InlineKeyboardMarkup()
-        mk.add(types.InlineKeyboardButton(d["new_link_name"], url=msg.text.strip()))
-        bot.edit_message_reply_markup(d["edit_channel"], d["edit_msg_id"], reply_markup=mk)
-        user_state.pop(uid, None)
-        draft.pop(uid, None)
-        bot.send_message(msg.chat.id, "✅ دکمه لینک آپدیت شد!", reply_markup=main_menu(uid))
-    except Exception as e:
-        bot.send_message(msg.chat.id, f"❌ خطا: {e}", reply_markup=main_menu(uid))
+    draft[uid]["edit_buttons"].append({"type": "link", "name": d["new_link_name"], "url": msg.text.strip()})
+    user_state[uid] = "edit_choose_action"
+    bot.send_message(msg.chat.id, "✅ دکمه لینک اضافه شد!")
+    show_edit_menu(msg.chat.id, uid)
 
 # ===================== برگشت یک مرحله =====================
 PREV_STATE = {
@@ -692,8 +714,8 @@ def recv_music_for_text(msg):
     else:
         draft[uid]["audio_id"] = msg.document.file_id
         draft[uid]["music_title"] = msg.document.file_name or "موزیک"
-    user_state[uid] = "confirm"
-    show_preview(msg, draft[uid])
+    user_state[uid] = "music_color"
+    bot.send_message(msg.chat.id, "🎨 رنگ دکمه موزیک رو انتخاب کن:", reply_markup=color_select_kb())
 
 @bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "photo", content_types=["photo"])
 def recv_photo(msg):
@@ -736,8 +758,8 @@ def recv_popup_text(msg):
 def recv_popup_btn_name(msg):
     uid = msg.from_user.id
     draft[uid]["popup_btn_name"] = msg.text
-    user_state[uid] = "confirm"
-    show_preview(msg, draft[uid])
+    user_state[uid] = "popup_color"
+    bot.send_message(msg.chat.id, "🎨 رنگ دکمه پاپ‌آپ رو انتخاب کن:", reply_markup=color_select_kb())
 
 @bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "link_text", content_types=["text"])
 def recv_link_text(msg):
@@ -750,8 +772,8 @@ def recv_link_text(msg):
 def recv_link_url(msg):
     uid = msg.from_user.id
     draft[uid]["link_url"] = msg.text
-    user_state[uid] = "confirm"
-    show_preview(msg, draft[uid])
+    user_state[uid] = "link_color"
+    bot.send_message(msg.chat.id, "🎨 رنگ دکمه لینک رو انتخاب کن:", reply_markup=color_select_kb())
 
 # ===================== زمان‌بندی =====================
 @bot.message_handler(func=lambda m: m.text == "⏰ زمان‌بندی‌ها")
@@ -866,6 +888,18 @@ def show_preview(msg, d):
         bot.send_message(msg.chat.id, f"❌ خطا در پیش‌نمایش: {e}", reply_markup=main_menu(msg.from_user.id))
 
 # ===================== callback های پیش‌نمایش =====================
+def color_select_kb():
+    mk = types.InlineKeyboardMarkup()
+    mk.row(
+        types.InlineKeyboardButton("🔵 آبی", callback_data="btncolor:primary"),
+        types.InlineKeyboardButton("🟢 سبز", callback_data="btncolor:success")
+    )
+    mk.row(
+        types.InlineKeyboardButton("🔴 قرمز", callback_data="btncolor:danger"),
+        types.InlineKeyboardButton("⬜ بدون رنگ", callback_data="btncolor:none")
+    )
+    return mk
+
 @bot.callback_query_handler(func=lambda c: c.data == "add_popup")
 def cb_add_popup(call):
     uid = call.from_user.id
@@ -889,6 +923,26 @@ def cb_add_music_link(call):
     else:
         user_state[uid] = "music_for_text"
         bot.send_message(call.message.chat.id, "🎵 فایل موزیک رو بفرست:", reply_markup=back_cancel_kb())
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("btncolor:"))
+def cb_btn_color(call):
+    uid = call.from_user.id
+    color = call.data.replace("btncolor:", "")
+    state = user_state.get(uid, "")
+    bot.answer_callback_query(call.id)
+
+    if state == "popup_color":
+        draft[uid]["popup_color"] = color if color != "none" else None
+        user_state[uid] = "confirm"
+        show_preview(call.message, draft[uid])
+    elif state == "link_color":
+        draft[uid]["link_color"] = color if color != "none" else None
+        user_state[uid] = "confirm"
+        show_preview(call.message, draft[uid])
+    elif state == "music_color":
+        draft[uid]["music_color"] = color if color != "none" else None
+        user_state[uid] = "confirm"
+        show_preview(call.message, draft[uid])
 
 @bot.callback_query_handler(func=lambda c: c.data == "edit_content")
 def cb_edit_content(call):
@@ -952,47 +1006,92 @@ def recv_schedule_answer(msg):
         draft.pop(uid, None)
         bot.send_message(msg.chat.id, "❌ انصراف.", reply_markup=main_menu(uid))
 
+def build_button_json(btn_list):
+    """ساخت JSON دکمه با پشتیبانی از رنگ"""
+    row = []
+    for b in btn_list:
+        btn = {"text": b["text"]}
+        if b.get("callback_data"):
+            btn["callback_data"] = b["callback_data"]
+        if b.get("url"):
+            btn["url"] = b["url"]
+        if b.get("style"):
+            btn["style"] = b["style"]
+        row.append(btn)
+    return {"inline_keyboard": [row]}
+
+def send_with_colored_buttons(method, chat_id, reply_markup_json, **kwargs):
+    """ارسال پیام با دکمه‌های رنگی از طریق HTTP مستقیم"""
+    import requests
+    url = f"https://api.telegram.org/bot{TOKEN}/{method}"
+    data = {"chat_id": chat_id, "reply_markup": json.dumps(reply_markup_json)}
+    data.update(kwargs)
+    resp = requests.post(url, data=data)
+    return resp.json()
+
 def do_send(chat_id, uid, d):
     try:
+        import requests
         music_ch = get_music_channel()
         music_msg = None
         if d.get("audio_id") and d.get("type") in ("text", "photo", "video"):
             music_msg = bot.send_audio(music_ch, d["audio_id"])
 
-        inline_mk = None
-        buttons = []
+        btn_list = []
         if d.get("popup_text"):
             btn_name = d.get("popup_btn_name", "💬 Me?")
             popup_id = str(uuid.uuid4())[:8]
-            # ذخیره متن پاپ‌آپ با ID
             popups = load_popups()
             popups[popup_id] = d["popup_text"]
             save_popups(popups)
-            buttons.append(types.InlineKeyboardButton(btn_name, callback_data=f"pp:{popup_id}"))
+            b = {"text": btn_name, "callback_data": f"pp:{popup_id}"}
+            if d.get("popup_color"):
+                b["style"] = d["popup_color"]
+            btn_list.append(b)
+
         if music_msg:
             music_link = f"https://t.me/{music_ch.replace('@','')}/{music_msg.message_id}"
-            buttons.append(types.InlineKeyboardButton("🎵 آهنگ", url=music_link))
+            b = {"text": "🎵 آهنگ", "url": music_link}
+            if d.get("music_color"):
+                b["style"] = d["music_color"]
+            btn_list.append(b)
+
         if d.get("link_text") and d.get("link_url"):
-            buttons.append(types.InlineKeyboardButton(d["link_text"], url=d["link_url"]))
-        if buttons:
-            inline_mk = types.InlineKeyboardMarkup()
-            inline_mk.row(*buttons)
+            b = {"text": d["link_text"], "url": d["link_url"]}
+            if d.get("link_color"):
+                b["style"] = d["link_color"]
+            btn_list.append(b)
 
+        reply_markup = build_button_json(btn_list) if btn_list else None
         target = d.get("channel", "@thelostinwaves")
-        if d["type"] == "text":
-            bot.send_message(target, d["text"], reply_markup=inline_mk)
-        elif d["type"] == "photo":
-            bot.send_photo(target, d["photo_id"], caption=d.get("caption", ""), reply_markup=inline_mk)
-        elif d["type"] == "video":
-            bot.send_video(target, d["video_id"], caption=d.get("caption", ""), reply_markup=inline_mk)
-        elif d["type"] == "music":
-            bot.send_audio(music_ch, d["audio_id"], caption=d.get("caption", ""), reply_markup=inline_mk)
 
-        draft.pop(uid, None)
-        user_state.pop(uid, None)
-        bot.send_message(chat_id, "✅ ارسال شد!", reply_markup=main_menu(uid))
+        if d["type"] == "text":
+            if reply_markup:
+                send_with_colored_buttons("sendMessage", target, reply_markup, text=d["text"])
+            else:
+                bot.send_message(target, d["text"])
+        elif d["type"] == "photo":
+            if reply_markup:
+                url_api = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
+                requests.post(url_api, data={"chat_id": target, "photo": d["photo_id"], "caption": d.get("caption",""), "reply_markup": json.dumps(reply_markup)})
+            else:
+                bot.send_photo(target, d["photo_id"], caption=d.get("caption",""))
+        elif d["type"] == "video":
+            if reply_markup:
+                url_api = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
+                requests.post(url_api, data={"chat_id": target, "video": d["video_id"], "caption": d.get("caption",""), "reply_markup": json.dumps(reply_markup)})
+            else:
+                bot.send_video(target, d["video_id"], caption=d.get("caption",""))
+        elif d["type"] == "music":
+            bot.send_audio(music_ch, d["audio_id"], caption=d.get("caption",""))
+
+        draft.pop(uid, None) if uid else None
+        user_state.pop(uid, None) if uid else None
+        if chat_id:
+            bot.send_message(chat_id, "✅ ارسال شد!", reply_markup=main_menu(uid))
     except Exception as e:
-        bot.send_message(chat_id, f"❌ خطا: {e}", reply_markup=main_menu(uid))
+        if chat_id:
+            bot.send_message(chat_id, f"❌ خطا: {e}", reply_markup=main_menu(uid))
         print(f"Send Error: {e}")
 
 # ===================== پاپ‌آپ با ID =====================
