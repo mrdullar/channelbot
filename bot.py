@@ -9,7 +9,7 @@ from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-TOKEN = "8829999667:AAFBCa3fNPE8yB-MhzUxaCoSEg4X5AG17Fs"
+TOKEN = "8829999667:AAHW75MRQR_4F05ekSOjPhlHbWdRcfNJVNo"
 OWNER_IDS = [8305135192, 8316171820]
 IRAN_TZ = ZoneInfo("Asia/Tehran")
 
