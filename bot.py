@@ -306,17 +306,29 @@ def recv_edit_add_popup_btn(msg):
     popups[popup_id] = popup_text
     save_popups(popups)
     draft[uid]["edit_buttons"].append({"type": "popup", "name": btn_name, "popup_id": popup_id})
+    draft[uid]["pending_color_idx"] = len(draft[uid]["edit_buttons"]) - 1
+    user_state[uid] = "edit_popup_color"
+    bot.send_message(msg.chat.id, "🎨 رنگ دکمه پاپ‌آپ رو انتخاب کن:", reply_markup=color_select_kb())
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("editcolor:"))
+def cb_edit_color(call):
+    uid = call.from_user.id
+    color = call.data.replace("editcolor:", "")
+    bot.answer_callback_query(call.id)
+    idx = draft.get(uid, {}).get("pending_color_idx")
+    if idx is not None and idx < len(draft[uid]["edit_buttons"]):
+        draft[uid]["edit_buttons"][idx]["style"] = color if color != "none" else None
     user_state[uid] = "edit_choose_action"
-    bot.send_message(msg.chat.id, "✅ پاپ‌آپ اضافه شد!")
-    show_edit_menu(msg.chat.id, uid)
+    bot.send_message(call.message.chat.id, "✅ رنگ ثبت شد!")
+    show_edit_menu(call.message.chat.id, uid)
 
 @bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_add_music_link", content_types=["text"])
 def recv_edit_add_music_link(msg):
     uid = msg.from_user.id
     draft[uid]["edit_buttons"].append({"type": "music", "name": "🎵 آهنگ", "url": msg.text.strip()})
-    user_state[uid] = "edit_choose_action"
-    bot.send_message(msg.chat.id, "✅ دکمه موزیک اضافه شد!")
-    show_edit_menu(msg.chat.id, uid)
+    draft[uid]["pending_color_idx"] = len(draft[uid]["edit_buttons"]) - 1
+    user_state[uid] = "edit_music_color"
+    bot.send_message(msg.chat.id, "🎨 رنگ دکمه موزیک رو انتخاب کن:", reply_markup=color_select_kb("editcolor"))
 
 @bot.message_handler(func=lambda m: user_state.get(m.from_user.id) == "edit_add_link_name", content_types=["text"])
 def recv_edit_add_link_name(msg):
@@ -330,9 +342,9 @@ def recv_edit_add_link_url(msg):
     uid = msg.from_user.id
     d = draft.get(uid, {})
     draft[uid]["edit_buttons"].append({"type": "link", "name": d["new_link_name"], "url": msg.text.strip()})
-    user_state[uid] = "edit_choose_action"
-    bot.send_message(msg.chat.id, "✅ دکمه لینک اضافه شد!")
-    show_edit_menu(msg.chat.id, uid)
+    draft[uid]["pending_color_idx"] = len(draft[uid]["edit_buttons"]) - 1
+    user_state[uid] = "edit_link_color"
+    bot.send_message(msg.chat.id, "🎨 رنگ دکمه لینک رو انتخاب کن:", reply_markup=color_select_kb("editcolor"))
 
 # ===================== برگشت یک مرحله =====================
 PREV_STATE = {
@@ -889,15 +901,15 @@ def show_preview(msg, d):
         bot.send_message(msg.chat.id, f"❌ خطا در پیش‌نمایش: {e}", reply_markup=main_menu(msg.from_user.id))
 
 # ===================== callback های پیش‌نمایش =====================
-def color_select_kb():
+def color_select_kb(prefix="btncolor"):
     mk = types.InlineKeyboardMarkup()
     mk.row(
-        types.InlineKeyboardButton("🔵 آبی", callback_data="btncolor:primary"),
-        types.InlineKeyboardButton("🟢 سبز", callback_data="btncolor:success")
+        types.InlineKeyboardButton("🔵 آبی", callback_data=f"{prefix}:primary"),
+        types.InlineKeyboardButton("🟢 سبز", callback_data=f"{prefix}:success")
     )
     mk.row(
-        types.InlineKeyboardButton("🔴 قرمز", callback_data="btncolor:danger"),
-        types.InlineKeyboardButton("⬜ بدون رنگ", callback_data="btncolor:none")
+        types.InlineKeyboardButton("🔴 قرمز", callback_data=f"{prefix}:danger"),
+        types.InlineKeyboardButton("⬜ بدون رنگ", callback_data=f"{prefix}:none")
     )
     return mk
 
