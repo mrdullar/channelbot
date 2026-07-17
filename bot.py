@@ -308,7 +308,7 @@ def recv_edit_add_popup_btn(msg):
     draft[uid]["edit_buttons"].append({"type": "popup", "name": btn_name, "popup_id": popup_id})
     draft[uid]["pending_color_idx"] = len(draft[uid]["edit_buttons"]) - 1
     user_state[uid] = "edit_choose_action"
-    bot.send_message(msg.chat.id, "🎨 رنگ دکمه پاپ‌آپ رو انتخاب کن:", reply_markup=color_select_kb())
+    bot.send_message(msg.chat.id, "🎨 رنگ دکمه پاپ‌آپ رو انتخاب کن:", reply_markup=color_select_kb("editcolor"))
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("editcolor:"))
 def cb_edit_color(call):
