@@ -248,19 +248,30 @@ def cb_editpost(call):
 
     elif action == "save":
         try:
+            import requests as req
             buttons = d.get("edit_buttons", [])
-            mk = types.InlineKeyboardMarkup()
-            row_btns = []
+            row = []
             for b in buttons:
                 if b["type"] == "popup":
-                    row_btns.append(types.InlineKeyboardButton(b["name"], callback_data=f"pp:{b['popup_id']}"))
-                elif b["type"] == "music":
-                    row_btns.append(types.InlineKeyboardButton(b["name"], url=b["url"]))
-                elif b["type"] == "link":
-                    row_btns.append(types.InlineKeyboardButton(b["name"], url=b["url"]))
-            if row_btns:
-                mk.row(*row_btns)
-            bot.edit_message_reply_markup(channel, msg_id, reply_markup=mk)
+                    btn = {"text": b["name"], "callback_data": f"pp:{b['popup_id']}"}
+                elif b["type"] in ("music", "link"):
+                    btn = {"text": b["name"], "url": b["url"]}
+                else:
+                    continue
+                if b.get("style"):
+                    btn["style"] = b["style"]
+                row.append(btn)
+            if row:
+                reply_markup = json.dumps({"inline_keyboard": [row]})
+                url_api = f"https://api.telegram.org/bot{TOKEN}/editMessageReplyMarkup"
+                resp = req.post(url_api, data={
+                    "chat_id": channel,
+                    "message_id": msg_id,
+                    "reply_markup": reply_markup
+                })
+                result = resp.json()
+                if not result.get("ok"):
+                    raise Exception(result.get("description", "خطای ناشناخته"))
             user_state.pop(uid, None)
             draft.pop(uid, None)
             bot.send_message(call.message.chat.id, "✅ دکمه‌ها آپدیت شدن!", reply_markup=main_menu(uid))
@@ -1123,14 +1134,39 @@ def save_popups(data):
     try:
         with open(POPUPS_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        # همچنین در environment variable ذخیره می‌کنیم
+        try:
+            import base64
+            encoded = base64.b64encode(json.dumps(data, ensure_ascii=False).encode()).decode()
+            os.environ["POPUPS_DATA"] = encoded
+        except:
+            pass
+    except Exception as e:
+        print(f"Save Popups Error: {e}")
+
+def get_popup_text(popup_id):
+    """پیدا کردن متن پاپ‌آپ - اول از فایل، بعد از env"""
+    popups = load_popups()
+    if popup_id in popups:
+        return popups[popup_id]
+    # اگه فایل نبود، از env بخون
+    try:
+        import base64
+        encoded = os.environ.get("POPUPS_DATA", "")
+        if encoded:
+            data = json.loads(base64.b64decode(encoded).decode())
+            if popup_id in data:
+                # ذخیره مجدد در فایل
+                save_popups(data)
+                return data[popup_id]
     except:
         pass
+    return "..."
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("pp:"))
 def handle_popup(call):
     popup_id = call.data.replace("pp:", "")
-    popups = load_popups()
-    text = popups.get(popup_id, "...")
+    text = get_popup_text(popup_id)
     bot.answer_callback_query(call.id, text, show_alert=True)
 
 # ===================== زمان‌بندی خودکار =====================
